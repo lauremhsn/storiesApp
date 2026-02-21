@@ -7,7 +7,7 @@ import seaborn as sns
 import warnings
 warnings.filterwarnings("ignore")
 
-# ── Page config ────────────────────────────────────────────────────────────────
+#Page config
 st.set_page_config(
     page_title="Stories Coffee · Intelligence Dashboard",
     page_icon="☕",
@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ─────────────────────────────────────────────────────────────────
+#Custom CSS
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -122,7 +122,7 @@ section[data-testid="stSidebar"] .stFileUploader label {
 </style>
 """, unsafe_allow_html=True)
 
-# ── Constants ──────────────────────────────────────────────────────────────────
+#Constants
 MONTHS = ['January','February','March','April','May','June',
           'July','August','September','October','November','December']
 EXCLUDE_BRANCHES = ['Total', 'Stories Event Starco', 'Stories.']
@@ -154,7 +154,7 @@ def warn(text):
 def section(title):
     st.markdown(f'<div class="section-header">{title}</div>', unsafe_allow_html=True)
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
+#Sidebar
 with st.sidebar:
     st.markdown("## ☕ Stories Coffee")
     st.markdown("### Intelligence Dashboard")
@@ -168,17 +168,29 @@ with st.sidebar:
     f_sales    = st.file_uploader("🏷️ Sales by Group",        type="csv", key="sales")
 
     st.markdown("---")
-    st.caption("Built for Stories Coffee · 2025 Hackathon")
+    st.markdown("**Select year to analyse**")
+    st.caption("Built for Stories Coffee · Hackathon")
 
-# ── Load data ──────────────────────────────────────────────────────────────────
+#Load data
 @st.cache_data
 def load_csv(f):
     return pd.read_csv(f)
 
 data_ready = all([f_monthly, f_category, f_prod, f_sales])
 
+if data_ready:
+    #detect available years from the monthly file and let user pick
+    _monthly_preview = load_csv(f_monthly)
+    available_years = sorted(_monthly_preview['Year'].dropna().unique().astype(int).tolist())
+    with st.sidebar:
+        selected_year = st.selectbox(
+            "Year",
+            options=available_years,
+            index=len(available_years) - 1,
+            help="Switch year — works with any future export automatically"
+        )
+
 if not data_ready:
-    # Landing screen
     st.markdown("""
     <div style="text-align:center; padding: 4rem 2rem;">
         <div style="font-family:'DM Serif Display',serif; font-size:3rem; color:#1a1008; margin-bottom:0.5rem;">
@@ -197,19 +209,19 @@ if not data_ready:
     """, unsafe_allow_html=True)
     st.stop()
 
-# Load all files
+#load all files
 monthly_raw  = load_csv(f_monthly)
 cat_df       = load_csv(f_category)
 prod_df      = load_csv(f_prod)
 sales_df     = load_csv(f_sales)
 
-# Derived columns
+#derived columns
 cat_df['Revenue'] = cat_df['Total Cost'] + cat_df['Total Profit']
 
-# Clean monthly
+#clean monthly
 monthly_2025 = (
     monthly_raw[
-        (monthly_raw['Year'] == 2025) &
+        (monthly_raw['Year'] == selected_year) &
         (~monthly_raw['Branch Name'].isin(EXCLUDE_BRANCHES))
     ]
     .drop_duplicates(subset='Branch Name')
@@ -217,7 +229,7 @@ monthly_2025 = (
 )
 monthly_2025 = monthly_2025[monthly_2025['Annual Total'] > 0].reset_index(drop=True)
 
-# Branch summary
+#Branch summary
 branch_sum = (
     cat_df.groupby('Branch')
     .agg(Total_Revenue=('Revenue','sum'), Total_Profit=('Total Profit','sum'),
@@ -227,7 +239,7 @@ branch_sum = (
 branch_sum['Margin'] = branch_sum['Total_Profit'] / (branch_sum['Total_Profit'] + branch_sum['Total_Cost']) * 100
 branch_sum = branch_sum.sort_values('Total_Profit', ascending=False).reset_index(drop=True)
 
-# Chain totals
+#Chain totals
 total_profit   = branch_sum['Total_Profit'].sum()
 total_branches = len(branch_sum)
 monthly_chain  = monthly_2025[MONTHS].sum()
@@ -235,7 +247,7 @@ peak_month     = monthly_chain.idxmax()
 trough_month   = monthly_chain.idxmin()
 peak_trough_ratio = monthly_chain.max() / monthly_chain.min()
 
-# Product groups
+#Product groups
 core_sales = sales_df[~sales_df['Group'].isin(EXCLUDE_GROUPS)].copy()
 grp = (core_sales.groupby('Group')
        .agg(Revenue=('Total Amount','sum'), Qty=('Qty','sum'))
@@ -244,7 +256,7 @@ grp = (core_sales.groupby('Group')
        .reset_index(drop=True))
 grp['Share'] = grp['Revenue'] / grp['Revenue'].sum() * 100
 
-# Service type
+#Service type
 svc = (prod_df.groupby(['Branch','Service Type'])
        .agg(Qty=('Qty','sum')).reset_index())
 svc_piv = svc.pivot_table(index='Branch', columns='Service Type', values='Qty', aggfunc='sum').fillna(0)
@@ -254,14 +266,14 @@ if 'TAKE AWAY' in svc_piv.columns and 'TABLE' in svc_piv.columns:
 else:
     chain_ta_share = None
 
-# ── HEADER ─────────────────────────────────────────────────────────────────────
+#HEADER
 st.markdown("""
 <div style="display:flex; align-items:baseline; gap:1rem; margin-bottom:0.2rem;">
     <span style="font-family:'DM Serif Display',serif; font-size:2.4rem; color:#1a1008;">
         Stories Coffee
     </span>
     <span style="font-size:0.9rem; color:#aaa; font-weight:500; letter-spacing:0.05em;">
-        INTELLIGENCE DASHBOARD · 2025
+        INTELLIGENCE DASHBOARD · {selected_year}
     </span>
 </div>
 """, unsafe_allow_html=True)
@@ -269,7 +281,7 @@ st.markdown("""
 # ── KPI ROW ────────────────────────────────────────────────────────────────────
 k1, k2, k3, k4, k5 = st.columns(5)
 with k1:
-    metric_card("Active Branches", f"{total_branches}", "Full year 2025")
+    metric_card("Active Branches", f"{total_branches}", f"Full year {selected_year}")
 with k2:
     metric_card("Chain Total Profit", f"{total_profit/1e6:.0f}M", "Arbitrary units")
 with k3:
@@ -347,9 +359,9 @@ with tab1:
     st.dataframe(display_df[['Rank','Branch','Total Profit','Margin %','Units Sold']],
                  use_container_width=True, hide_index=True)
 
-# ════════════════════════════════════════════════════════════════════════════════
-# TAB 2 — SEASONALITY
-# ════════════════════════════════════════════════════════════════════════════════
+#════════════════════════════════════════════════════════════════════════════════
+#TAB 2 — SEASONALITY
+#════════════════════════════════════════════════════════════════════════════════
 with tab2:
     section("Monthly Seasonality Analysis")
 
@@ -360,7 +372,7 @@ with tab2:
     ax1.bar(monthly_chain.index, monthly_chain / 1e6, color=bar_c, edgecolor='white', linewidth=0.5)
     ax1.axhline(monthly_chain.mean()/1e6, color='#1a1008', linestyle='--', lw=1.5,
                 label=f'Avg: {monthly_chain.mean()/1e6:.0f}M')
-    ax1.set_title('Chain-Wide Monthly Revenue (2025)', fontweight='bold', pad=12)
+    ax1.set_title('Chain-Wide Monthly Revenue ({selected_year})', fontweight='bold', pad=12)
     ax1.set_ylabel('Revenue (Millions)')
     ax1.legend(fontsize=8)
     ax1.tick_params(axis='x', rotation=40)
@@ -397,7 +409,7 @@ with tab2:
     fig3, ax3 = plt.subplots(figsize=(10, 3.5))
     ax3.fill_between(MONTHS, [v/1e6 for v in vals], alpha=0.2, color='#c8852a')
     ax3.plot(MONTHS, [v/1e6 for v in vals], 'o-', color='#c8852a', lw=2, markersize=5)
-    ax3.set_title(f'{selected} — Monthly Revenue 2025', fontweight='bold', pad=10)
+    ax3.set_title(f'{selected} — Monthly Revenue {selected_year}', fontweight='bold', pad=10)
     ax3.set_ylabel('Revenue (Millions)')
     ax3.tick_params(axis='x', rotation=40)
     ax3.spines[['top','right']].set_visible(False)
@@ -594,6 +606,6 @@ with tab5:
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("""
     <div style="text-align:center; color:#bbb; font-size:0.8rem; padding: 1rem;">
-        Stories Coffee Intelligence Dashboard · Built with real 2025 operational data
+        Stories Coffee Intelligence Dashboard · Built with real operational data
     </div>
     """, unsafe_allow_html=True)
